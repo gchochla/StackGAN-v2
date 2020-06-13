@@ -9,32 +9,16 @@ import torchvision.transforms as transforms
 from PIL import Image
 import PIL
 import os
-import os.path
 import pickle
 import random
 import numpy as np
 import pandas as pd
 from miscc.config import cfg
 
-import torch.utils.data as data
-from PIL import Image
-import os
-import os.path
 import six
 import string
 import sys
 import torch
-if sys.version_info[0] == 2:
-    import cPickle as pickle
-else:
-    import pickle
-
-IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG',
-                  '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP']
-
-
-def is_image_file(filename):
-    return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
 
 def get_imgs(img_path, imsize, bbox=None,
