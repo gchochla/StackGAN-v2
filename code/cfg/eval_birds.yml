@@ -2,7 +2,7 @@ CONFIG_NAME: '3stages'
 
 DATASET_NAME: 'birds'
 EMBEDDING_TYPE: 'cnn-rnn'
-DATA_DIR: '../data/birds'
+DATA_DIR: '/data/CUB_200_2011'
 GPU_ID: '3'
 WORKERS: 1  # 4
 

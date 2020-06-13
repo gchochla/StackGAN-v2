@@ -64,16 +64,13 @@ class TextDataset(data.Dataset):
 
         self.data = []
         self.data_dir = data_dir
-        if data_dir.find('birds') != -1:
-            self.bbox = self.load_bbox()
-        else:
-            self.bbox = None
-        split_dir = os.path.join(data_dir, split)
+        self.bbox = self.load_bbox()
+        split_dir = os.path.join(data_dir, 'embeddings_' + split)
 
         self.filenames = self.load_filenames(split_dir)
         self.embeddings = self.load_embedding(split_dir, embedding_type)
         self.class_id = self.load_class_id(split_dir, len(self.filenames))
-        self.captions = self.load_all_captions()
+        # self.captions = self.load_all_captions()
 
         if cfg.TRAIN.FLAG:
             self.iterator = self.prepair_training_pairs
@@ -82,20 +79,19 @@ class TextDataset(data.Dataset):
 
     def load_bbox(self):
         data_dir = self.data_dir
-        bbox_path = os.path.join(data_dir, 'CUB_200_2011/bounding_boxes.txt')
+        bbox_path = os.path.join(data_dir, 'bounding_boxes.txt')
         df_bounding_boxes = pd.read_csv(bbox_path,
                                         delim_whitespace=True,
                                         header=None).astype(int)
         #
-        filepath = os.path.join(data_dir, 'CUB_200_2011/images.txt')
-        df_filenames = \
-            pd.read_csv(filepath, delim_whitespace=True, header=None)
+        filepath = os.path.join(data_dir, 'images.txt')
+        df_filenames = pd.read_csv(filepath, delim_whitespace=True, header=None)
         filenames = df_filenames[1].tolist()
         print('Total filenames: ', len(filenames), filenames[0])
         #
         filename_bbox = {img_file[:-4]: [] for img_file in filenames}
         numImgs = len(filenames)
-        for i in xrange(0, numImgs):
+        for i in range(numImgs):
             # bbox = [x-left, y-top, width, height]
             bbox = df_bounding_boxes.iloc[i][1:].tolist()
 
@@ -152,12 +148,8 @@ class TextDataset(data.Dataset):
 
     def prepair_training_pairs(self, index):
         key = self.filenames[index]
-        if self.bbox is not None:
-            bbox = self.bbox[key]
-            data_dir = '%s/CUB_200_2011' % self.data_dir
-        else:
-            bbox = None
-            data_dir = self.data_dir
+        bbox = self.bbox[key]
+        data_dir = self.data_dir
         # captions = self.captions[key]
         embeddings = self.embeddings[index, :, :]
         img_name = '%s/images/%s.jpg' % (data_dir, key)
@@ -168,10 +160,7 @@ class TextDataset(data.Dataset):
         if(self.class_id[index] == self.class_id[wrong_ix]):
             wrong_ix = random.randint(0, len(self.filenames) - 1)
         wrong_key = self.filenames[wrong_ix]
-        if self.bbox is not None:
-            wrong_bbox = self.bbox[wrong_key]
-        else:
-            wrong_bbox = None
+        wrong_bbox = self.bbox[wrong_key]
         wrong_img_name = '%s/images/%s.jpg' % \
             (data_dir, wrong_key)
         wrong_imgs = get_imgs(wrong_img_name, self.imsize,
@@ -186,12 +175,8 @@ class TextDataset(data.Dataset):
 
     def prepair_test_pairs(self, index):
         key = self.filenames[index]
-        if self.bbox is not None:
-            bbox = self.bbox[key]
-            data_dir = '%s/CUB_200_2011' % self.data_dir
-        else:
-            bbox = None
-            data_dir = self.data_dir
+        bbox = self.bbox[key]
+        data_dir = self.data_dir
         # captions = self.captions[key]
         embeddings = self.embeddings[index, :, :]
         img_name = '%s/images/%s.jpg' % (data_dir, key)
