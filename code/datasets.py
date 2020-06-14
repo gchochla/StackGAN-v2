@@ -454,3 +454,154 @@ def _is_grayscale(image):
         return False
     except ValueError:
         return True
+
+class SyntheticDataset(torch.utils.data.Dataset):
+    """Dataset for synthetic samples.
+
+    Dataset to store and retrieve synthetic samples rather than
+    holding them all in RAM. Only cares for the samples it
+    was used to store. Stores with sequential filenames akin
+    to indices for trivial indexing.
+
+    Attributes:
+        n_sample(int): number of samples.
+        sample_key(str): key of dictionary used to store
+            and retrieve samples.
+        label_key(str): key of dictionary used to store
+            and retrieve corresponding labels.
+        template_fn(str): formattable filename for each
+            different sample.
+    """
+
+    def __init__(self, dataset_dir=None):
+        """Init.
+
+        Args:
+            dataset_dir(str, optional): directory of dataset,
+                default=directory 'dataset' under the
+                invisible-to-git cache directory specified
+                in configuration file.
+        """
+
+        if dataset_dir is None:
+            dataset_dir = os.path.join(CACHE_DIR, 'dataset')
+
+        if not os.path.exists(dataset_dir):
+            os.makedirs(dataset_dir)
+
+        self.n_sample = 0
+        self.sample_key = 'sample'
+        self.label_key = 'label'
+        self.fn_template = os.path.join(dataset_dir, 'sample_{}.pt')
+
+    @classmethod
+    def existing(cls, dataset_dir=None):
+        """Init from existing directory.
+
+        Args:
+            dataset_dir(str, optional): directory of dataset,
+                default=directory 'dataset' under the
+                invisible-to-git cache directory specified
+                in configuration file.
+        """
+
+        obj = cls(dataset_dir)
+        obj.n_sample = len(os.listdir(dataset_dir))
+        return obj
+
+    def _getitem(self, idx):
+        """__getitem__ but only for ints.
+
+        Args:
+            idx(int): index.
+
+        Returns:
+            torch.Tensors sample and label.
+        """
+
+        if idx < - len(self) or idx >= len(self):
+            raise IndexError('Index {} out of range'.format(idx))
+
+        if idx < 0:
+            idx += len(self)
+
+        # saved as cpu tensors
+        sample_dict = torch.load(self.fn_template.format(idx))
+        return sample_dict[self.sample_key], sample_dict[self.label_key]
+
+    def __getitem__(self, idx):
+        """Loads and returns a sample and its label.
+
+        Args:
+            idx(int|slice|torch.Tensor|list): index/indices
+                of sample(s).
+
+        Returns:
+            torch.Tensors sample(s) and label(s).
+        """
+
+        if torch.is_tensor(idx):
+            if idx.ndim == 0:
+                idx = idx.item()
+            else:
+                idx = list(idx.numpy())
+
+        if isinstance(idx, int):
+            return self._getitem(idx)
+
+        if isinstance(idx, slice):
+            # slice (for kNN etc)
+            samples, labels = [], []
+            for i in range(*idx.indices(len(self))):
+                sample, label = self._getitem(i)
+                samples.append(sample)
+                labels.append(label)
+
+            if not samples:
+                raise IndexError('No elements corresponding to {}'.format(idx))
+
+            return torch.stack(samples), torch.stack(labels)
+
+        if isinstance(idx, list):
+            samples, labels = [], []
+            for i in idx:
+                sample, label = self._getitem(i)
+                samples.append(sample)
+                labels.append(label)
+
+            if not samples:
+                raise IndexError('No elements corresponding to {}'.format(idx))
+
+            return torch.stack(samples), torch.stack(labels)
+
+        raise IndexError('Unhandled index type')
+
+    def __len__(self):
+        """Returns number of stored samples."""
+        return self.n_sample
+
+    def save_pairs(self, samples, label):
+        """Saves sample-label pairs.
+
+        Saves pairs of samples and their corresponding label
+        (assumed to be the same for all samples, thus only an
+        integer is expected) with a filename specified by the
+        template and order of receival.
+
+        Args:
+            samples(torch.tensor): batch of samples.
+            label(int): their corresponding label.
+        """
+
+        if not torch.is_tensor(label):
+            label = torch.tensor(label, dtype=torch.long)  # pylint: disable=not-callable
+
+        samples = samples.cpu()
+        label = label.cpu()
+
+        sample_dict = {self.label_key: label}
+
+        for i in range(samples.size(0)):
+            sample_dict[self.sample_key] = samples[i]
+            torch.save(sample_dict, self.fn_template.format(self.n_sample))
+            self.n_sample += 1
