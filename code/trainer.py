@@ -18,7 +18,6 @@ from miscc.utils import mkdir_p
 from feature_extractors import GoogleNetAvgpool, set_parameter_requires_grad
 
 from tensorboard import summary
-from tensorboard import FileWriter
 
 from model import G_NET, D_NET64, D_NET128, D_NET256, D_NET512, D_NET1024, INCEPTION_V3
 from datasets import SyntheticDataset
@@ -191,7 +190,7 @@ def save_model(netG, avg_param_G, netsD, epoch, model_dir):
 
 
 def save_img_results(imgs_tcpu, fake_imgs, num_imgs,
-                     count, image_dir, summary_writer):
+                     count, image_dir):
     num = cfg.TRAIN.VIS_COUNT
 
     # The range of real_img (i.e., self.imgs_tcpu[i][0:num])
@@ -205,7 +204,6 @@ def save_img_results(imgs_tcpu, fake_imgs, num_imgs,
     real_img_set = real_img_set * 255
     real_img_set = real_img_set.astype(np.uint8)
     sup_real_img = summary.image('real_img', real_img_set)
-    summary_writer.add_summary(sup_real_img, count)
 
     for i in range(num_imgs):
         fake_img = fake_imgs[i][0:num]
@@ -222,8 +220,6 @@ def save_img_results(imgs_tcpu, fake_imgs, num_imgs,
         fake_img_set = fake_img_set.astype(np.uint8)
 
         sup_fake_img = summary.image('fake_img%d' % i, fake_img_set)
-        summary_writer.add_summary(sup_fake_img, count)
-        summary_writer.flush()
 
 # ################# Text to image task############################ #
 class condGANTrainer(object):
@@ -235,7 +231,6 @@ class condGANTrainer(object):
             mkdir_p(self.model_dir)
             mkdir_p(self.image_dir)
             mkdir_p(self.log_dir)
-            self.summary_writer = FileWriter(self.log_dir)
 
         s_gpus = cfg.GPU_ID.split(',')
         self.gpus = [int(ix) for ix in s_gpus]
@@ -311,7 +306,6 @@ class condGANTrainer(object):
         # log
         if flag == 0:
             summary_D = summary.scalar('D_loss%d' % idx, errD.data[0])
-            self.summary_writer.add_summary(summary_D, count)
         return errD
 
     def train_Gnet(self, count):
@@ -331,7 +325,6 @@ class condGANTrainer(object):
             errG_total = errG_total + errG
             if flag == 0:
                 summary_D = summary.scalar('G_loss%d' % i, errG.data[0])
-                self.summary_writer.add_summary(summary_D, count)
 
         # Compute color consistency losses
         if cfg.TRAIN.COEFF.COLOR_LOSS > 0:
@@ -345,9 +338,7 @@ class condGANTrainer(object):
                 errG_total = errG_total + like_mu2 + like_cov2
                 if flag == 0:
                     sum_mu = summary.scalar('G_like_mu2', like_mu2.data[0])
-                    self.summary_writer.add_summary(sum_mu, count)
                     sum_cov = summary.scalar('G_like_cov2', like_cov2.data[0])
-                    self.summary_writer.add_summary(sum_cov, count)
             if self.num_Ds > 2:
                 mu1, covariance1 = compute_mean_covariance(self.fake_imgs[-2])
                 mu2, covariance2 = \
@@ -358,9 +349,7 @@ class condGANTrainer(object):
                 errG_total = errG_total + like_mu1 + like_cov1
                 if flag == 0:
                     sum_mu = summary.scalar('G_like_mu1', like_mu1.data[0])
-                    self.summary_writer.add_summary(sum_mu, count)
                     sum_cov = summary.scalar('G_like_cov1', like_cov1.data[0])
-                    self.summary_writer.add_summary(sum_cov, count)
 
         kl_loss = KL_loss(mu, logvar) * cfg.TRAIN.COEFF.KL
         errG_total = errG_total + kl_loss
@@ -442,9 +431,6 @@ class condGANTrainer(object):
                     summary_D = summary.scalar('D_loss', errD_total.data[0])
                     summary_G = summary.scalar('G_loss', errG_total.data[0])
                     summary_KL = summary.scalar('KL_loss', kl_loss.data[0])
-                    self.summary_writer.add_summary(summary_D, count)
-                    self.summary_writer.add_summary(summary_G, count)
-                    self.summary_writer.add_summary(summary_KL, count)
 
                 count = count + 1
 
@@ -457,7 +443,7 @@ class condGANTrainer(object):
                     self.fake_imgs, _, _ = \
                         self.netG(fixed_noise, self.txt_embedding)
                     save_img_results(self.imgs_tcpu, self.fake_imgs, self.num_Ds,
-                                     count, self.image_dir, self.summary_writer)
+                                     count, self.image_dir)
                     #
                     load_params(self.netG, backup_para)
 
@@ -467,12 +453,10 @@ class condGANTrainer(object):
                         mean, std = compute_inception_score(predictions, 10)
                         # print('mean:', mean, 'std', std)
                         m_incep = summary.scalar('Inception_mean', mean)
-                        self.summary_writer.add_summary(m_incep, count)
                         #
                         mean_nlpp, std_nlpp = \
                             negative_log_posterior_probability(predictions, 10)
                         m_nlpp = summary.scalar('NLPP_mean', mean_nlpp)
-                        self.summary_writer.add_summary(m_nlpp, count)
                         #
                         predictions = []
 
@@ -485,7 +469,6 @@ class condGANTrainer(object):
                      kl_loss.data[0], end_t - start_t))
 
         save_model(self.netG, avg_param_G, self.netsD, count, self.model_dir)
-        self.summary_writer.close()
 
     def save_superimages(self, images_list, filenames,
                          save_dir, split_dir, imsize):
