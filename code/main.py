@@ -67,6 +67,7 @@ def parse_args():
     parser.add_argument('--manualSeed', type=int, help='manual seed')
     parser.add_argument('--save_dir', type=str)
     parser.add_argument('--n_samples', type=int, default=4)
+    parser.add_argument('--extractor', type=str, default='googlenet')
     args = parser.parse_args()
     return args
 
@@ -111,4 +112,4 @@ if __name__ == "__main__":
     from trainer import condGANTrainer as trainer
     algo = trainer('', dataloader, imsize)
 
-    algo.evaluate(split_dir, args.n_samples, args.save_dir)
+    algo.evaluate(split_dir, args.n_samples, args.extractor, args.save_dir)
