@@ -565,7 +565,8 @@ class condGANTrainer(object):
                     if cfg.CUDA:
                         noise = noise.cuda()
 
-                    samples = netG(noise, image_embeddings)
-                    samples = mapper(samples)
+                    imgs, _, _ = netG(noise, image_embeddings)
+                    imgs = imgs[-1]
+                    samples = mapper(imgs)
                     
                     synthetic_ds.save_pairs(samples, synthetic_id)
