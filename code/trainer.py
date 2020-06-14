@@ -559,12 +559,13 @@ class condGANTrainer(object):
                     class_embeddings = class_embeddings.cuda()
 
                 class_embeddings = class_embeddings.mean(dim=1)  # mean of 10 captions per image
-                class_embeddings = class_embeddings.repeat_interleave(nz, dim=0)
-                noise = torch.randn(class_embeddings.size(0), nz)
-                if cfg.CUDA:
-                    noise = noise.cuda()
+                for i in range(class_embeddings.size(0)):
+                    image_embeddings = class_embeddings[i].repeat(n_samples, 1) 
+                    noise = torch.randn(n_samples, nz)
+                    if cfg.CUDA:
+                        noise = noise.cuda()
 
-                samples = netG(noise, class_embeddings)
-                samples = mapper(samples)
-                
-                synthetic_ds.save_pairs(samples, synthetic_id)
+                    samples = netG(noise, image_embeddings)
+                    samples = mapper(samples)
+                    
+                    synthetic_ds.save_pairs(samples, synthetic_id)
