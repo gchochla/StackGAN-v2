@@ -15,7 +15,7 @@ from copy import deepcopy
 
 from miscc.config import cfg
 from miscc.utils import mkdir_p
-from feature_extractors import GoogleNetAvgpool, set_parameter_requires_grad
+from feature_extractors import EXTRACTOR_MAPPING, set_parameter_requires_grad
 
 from tensorboard import summary
 
@@ -511,7 +511,7 @@ class condGANTrainer(object):
             im = Image.fromarray(ndarr)
             im.save(fullpath)
 
-    def evaluate(self, split_dir, n_samples=4, save_dir=None):
+    def evaluate(self, split_dir, n_samples=4, extractor='googlenet', save_dir=None):
         if cfg.TRAIN.NET_G == '':
             print('Error: the path for morels is not found!')
         else:
@@ -521,7 +521,7 @@ class condGANTrainer(object):
             netG = G_NET()
             netG.apply(weights_init)
             netG = torch.nn.DataParallel(netG, device_ids=self.gpus)
-            mapper = GoogleNetAvgpool()
+            mapper = EXTRACTOR_MAPPING[extractor]()
             mapper = torch.nn.DataParallel(mapper, device_ids=self.gpus)
             set_parameter_requires_grad(netG, False)
             set_parameter_requires_grad(mapper, False)
