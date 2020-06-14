@@ -553,7 +553,7 @@ class condGANTrainer(object):
 
             synthetic_ds = SyntheticDataset(save_dir)
 
-            for class_embeddings, synthetic_id in self.dataset.dataset.embeddings_by_class():
+            for class_embeddings, synthetic_id in self.data_loader.dataset.embeddings_by_class():
 
                 if cfg.CUDA:
                     class_embeddings = class_embeddings.cuda()
