@@ -523,6 +523,7 @@ class condGANTrainer(object):
             netG = torch.nn.DataParallel(netG, device_ids=self.gpus)
             mapper = GoogleNetAvgpool()
             mapper = torch.nn.DataParallel(mapper, device_ids=self.gpus)
+            set_parameter_requires_grad(netG, False)
             set_parameter_requires_grad(mapper, False)
 
             print(netG)
@@ -550,6 +551,7 @@ class condGANTrainer(object):
 
             # switch to evaluate mode
             netG.eval()
+            mapper.eval()
 
             synthetic_ds = SyntheticDataset(save_dir)
 
