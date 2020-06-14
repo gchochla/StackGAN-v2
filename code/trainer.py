@@ -15,12 +15,13 @@ from copy import deepcopy
 
 from miscc.config import cfg
 from miscc.utils import mkdir_p
+from feature_extractors import GoogleNetAvgpool, set_parameter_requires_grad
 
 from tensorboard import summary
 from tensorboard import FileWriter
 
 from model import G_NET, D_NET64, D_NET128, D_NET256, D_NET512, D_NET1024, INCEPTION_V3
-
+from datasets import SyntheticDataset
 
 
 # ################## Shared functions ###################
@@ -527,7 +528,7 @@ class condGANTrainer(object):
             im = Image.fromarray(ndarr)
             im.save(fullpath)
 
-    def evaluate(self, split_dir):
+    def evaluate(self, split_dir, n_samples=4, save_dir=None):
         if cfg.TRAIN.NET_G == '':
             print('Error: the path for morels is not found!')
         else:
@@ -537,6 +538,10 @@ class condGANTrainer(object):
             netG = G_NET()
             netG.apply(weights_init)
             netG = torch.nn.DataParallel(netG, device_ids=self.gpus)
+            mapper = GoogleNetAvgpool()
+            mapper = torch.nn.DataParallel(mapper, device_ids=self.gpus)
+            set_parameter_requires_grad(mapper, False)
+
             print(netG)
             # state_dict = torch.load(cfg.TRAIN.NET_G)
             state_dict = \
@@ -545,54 +550,38 @@ class condGANTrainer(object):
             netG.load_state_dict(state_dict)
             print('Load ', cfg.TRAIN.NET_G)
 
-            # the path to save generated images
-            s_tmp = cfg.TRAIN.NET_G
-            istart = s_tmp.rfind('_') + 1
-            iend = s_tmp.rfind('.')
-            iteration = int(s_tmp[istart:iend])
-            s_tmp = s_tmp[:s_tmp.rfind('/')]
-            save_dir = '%s/iteration%d' % (s_tmp, iteration)
+            if save_dir is None:
+                # the path to save generated images
+                s_tmp = cfg.TRAIN.NET_G
+                istart = s_tmp.rfind('_') + 1
+                iend = s_tmp.rfind('.')
+                iteration = int(s_tmp[istart:iend])
+                s_tmp = s_tmp[:s_tmp.rfind('/')]
+                save_dir = '%s/iteration%d' % (s_tmp, iteration)
 
             nz = cfg.GAN.Z_DIM
-            noise = Variable(torch.FloatTensor(self.batch_size, nz))
+            
             if cfg.CUDA:
                 netG.cuda()
-                noise = noise.cuda()
+                mapper.cuda()
 
             # switch to evaluate mode
             netG.eval()
-            for step, data in enumerate(self.data_loader, 0):
-                imgs, t_embeddings, filenames = data
+
+            synthetic_ds = SyntheticDataset(save_dir)
+
+            for class_embeddings, synthetic_id in self.dataset.dataset.embeddings_by_class():
+
                 if cfg.CUDA:
-                    t_embeddings = Variable(t_embeddings).cuda()
-                else:
-                    t_embeddings = Variable(t_embeddings)
-                # print(t_embeddings[:, 0, :], t_embeddings.size(1))
+                    class_embeddings = class_embeddings.cuda()
 
-                embedding_dim = t_embeddings.size(1)
-                batch_size = imgs[0].size(0)
-                noise.data.resize_(batch_size, nz)
-                noise.data.normal_(0, 1)
+                class_embeddings = class_embeddings.mean(dim=1)  # mean of 10 captions per image
+                class_embeddings = class_embeddings.repeat_interleave(nz, dim=0)
+                noise = torch.randn(class_embeddings.size(0), nz)
+                if cfg.CUDA:
+                    noise = noise.cuda()
 
-                fake_img_list = []
-                for i in range(embedding_dim):
-                    fake_imgs, _, _ = netG(noise, t_embeddings[:, i, :])
-                    if cfg.TEST.B_EXAMPLE:
-                        # fake_img_list.append(fake_imgs[0].data.cpu())
-                        # fake_img_list.append(fake_imgs[1].data.cpu())
-                        fake_img_list.append(fake_imgs[2].data.cpu())
-                    else:
-                        self.save_singleimages(fake_imgs[-1], filenames,
-                                               save_dir, split_dir, i, 256)
-                        # self.save_singleimages(fake_imgs[-2], filenames,
-                        #                        save_dir, split_dir, i, 128)
-                        # self.save_singleimages(fake_imgs[-3], filenames,
-                        #                        save_dir, split_dir, i, 64)
-                    # break
-                if cfg.TEST.B_EXAMPLE:
-                    # self.save_superimages(fake_img_list, filenames,
-                    #                       save_dir, split_dir, 64)
-                    # self.save_superimages(fake_img_list, filenames,
-                    #                       save_dir, split_dir, 128)
-                    self.save_superimages(fake_img_list, filenames,
-                                          save_dir, split_dir, 256)
+                samples = netG(noise, class_embeddings)
+                samples = mapper(samples)
+                
+                synthetic_ds.save_pairs(samples, synthetic_id)

@@ -2,6 +2,8 @@ from __future__ import print_function
 import torch
 import torchvision.transforms as transforms
 
+
+from datasets import CUBDatasetLazy
 import argparse
 import os
 import random
@@ -11,10 +13,8 @@ import datetime
 import dateutil.tz
 import time
 
-
 dir_path = (os.path.abspath(os.path.join(os.path.realpath(__file__), './.')))
 sys.path.append(dir_path)
-
 
 from miscc.config import cfg, cfg_from_file
 
@@ -65,6 +65,8 @@ def parse_args():
     parser.add_argument('--gpu', dest='gpu_id', type=str, default='-1')
     parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
     parser.add_argument('--manualSeed', type=int, help='manual seed')
+    parser.add_argument('--save_dir', type=str)
+    parser.add_argument('--n_samples', type=int, default=4)
     args = parser.parse_args()
     return args
 
@@ -93,62 +95,20 @@ if __name__ == "__main__":
     if cfg.CUDA:
         torch.cuda.manual_seed_all(args.manualSeed)
 
-    now = datetime.datetime.now(dateutil.tz.tzlocal())
-    timestamp = now.strftime('%Y_%m_%d_%H_%M_%S')
-    output_dir = '../output/%s_%s_%s' % \
-        (cfg.DATASET_NAME, cfg.CONFIG_NAME, timestamp)
-
-    split_dir, bshuffle = 'train', True
-    if not cfg.TRAIN.FLAG:
-        if cfg.DATASET_NAME == 'birds':
-            bshuffle = False
-            split_dir = 'test'
-
+    split_dir, bshuffle = 'test', False
     # Get data loader
     imsize = cfg.TREE.BASE_SIZE * (2 ** (cfg.TREE.BRANCH_NUM-1))
-    image_transform = transforms.Compose([
-        transforms.Scale(int(imsize * 76 / 64)),
-        transforms.RandomCrop(imsize),
-        transforms.RandomHorizontalFlip()])
-    if cfg.DATA_DIR.find('lsun') != -1:
-        from datasets import LSUNClass
-        dataset = LSUNClass('%s/%s_%s_lmdb' %
-                            (cfg.DATA_DIR, cfg.DATASET_NAME, split_dir),
-                            base_size=cfg.TREE.BASE_SIZE, transform=image_transform)
-    elif cfg.DATA_DIR.find('imagenet') != -1:
-        from datasets import ImageFolder
-        dataset = ImageFolder(cfg.DATA_DIR, split_dir='train',
-                              custom_classes=CLASS_DIC[cfg.DATASET_NAME],
-                              base_size=cfg.TREE.BASE_SIZE,
-                              transform=image_transform)
-    elif cfg.GAN.B_CONDITION:  # text to image task
-        from datasets import TextDataset
-        dataset = TextDataset(cfg.DATA_DIR, split_dir,
-                              base_size=cfg.TREE.BASE_SIZE,
-                              transform=image_transform)
-    assert dataset
+
+    dataset = CUBDatasetLazy(cfg.DATA_DIR, 'images', 'embeddings_' + split_dir)
+
     num_gpu = len(cfg.GPU_ID.split(','))
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=cfg.TRAIN.BATCH_SIZE * num_gpu,
         drop_last=True, shuffle=bshuffle, num_workers=int(cfg.WORKERS))
 
     # Define models and go to train/evaluate
-    if not cfg.GAN.B_CONDITION:
-        from trainer import GANTrainer as trainer
-    else:
-        from trainer import condGANTrainer as trainer
-    algo = trainer(output_dir, dataloader, imsize)
 
-    start_t = time.time()
-    if cfg.TRAIN.FLAG:
-        algo.train()
-    else:
-        algo.evaluate(split_dir)
-    end_t = time.time()
-    print('Total time for training:', end_t - start_t)
-    ''' Running time comparison for 10epoch with batch_size 24 on birds dataset
-        T(1gpu) = 1.383 T(2gpus)
-            - gpu 2: 2426.228544 -> 4min/epoch
-            - gpu 2 & 3: 1754.12295008 -> 2.9min/epoch
-            - gpu 3: 2514.02744293
-    '''
+    from trainer import condGANTrainer as trainer
+    algo = trainer('', dataloader, imsize)
+
+    algo.evaluate(split_dir, args.n_samples, args.save_dir)
