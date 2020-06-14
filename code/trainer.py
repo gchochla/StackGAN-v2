@@ -15,10 +15,8 @@ from copy import deepcopy
 
 from miscc.config import cfg
 from miscc.utils import mkdir_p
-from feature_extractors import (
-    EXTRACTOR_MAPPING, set_parameter_requires_grad, GoogleNetAvgpool,
-    VGGAvgpool, Inception3Avgpool, ResNetAvgpool
-)
+from feature_extractors import EXTRACTOR_MAPPING, set_parameter_requires_grad
+
 
 from tensorboard import summary
 

@@ -14,9 +14,6 @@ from torchvision.models import (  # pylint: disable=unused-import
     vgg13_bn, vgg19_bn
 )
 
-EXTRACTOR_MAPPING = {'googlenet': GoogleNetAvgpool, 'vgg': VGGAvgpool,
-                     'inception': Inception3Avgpool, 'resnet': ResNetAvgpool}
-
 def set_parameter_requires_grad(model, requires_grad=False):
     """Sets requires_grad for all the parameters in a model.
 
@@ -247,3 +244,6 @@ class GoogleNetAvgpool(nn.Module):
         x = self.features(x)
         x = x.view(x.size(0), -1)  # 1024
         return x
+
+EXTRACTOR_MAPPING = {'googlenet': GoogleNetAvgpool, 'vgg': VGGAvgpool,
+                     'inception': Inception3Avgpool, 'resnet': ResNetAvgpool}
